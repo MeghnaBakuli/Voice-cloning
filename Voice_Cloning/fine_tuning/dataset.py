@@ -1,86 +1,91 @@
-
 from pathlib import Path
-import json
 
 
 class VoiceDataset:
     """
-    Handles audio files and metadata for voice fine-tuning.
-
-    Expected dataset structure:
-
-    data/
-    └── voice_cloning/
-        └── datasets/
-            └── <user_id>/
-                ├── audio1.wav
-                ├── audio2.wav
-                └── metadata.json
+    Connects existing audio recordings in data/audio
+    with their matching transcripts in data/text.
     """
 
-    SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+    SUPPORTED_EXTENSIONS = {
+        ".wav",
+        ".mp3",
+        ".flac",
+        ".ogg",
+        ".m4a"
+    }
 
-    def __init__(self, dataset_directory, user_id):
-        self.dataset_directory = Path(dataset_directory)
-        self.user_id = user_id
+    def __init__(self, project_root):
+        self.project_root = Path(project_root)
 
-        self.user_directory = self.dataset_directory / user_id
-        self.metadata_file = self.user_directory / "metadata.json"
+        self.audio_directory = (
+            self.project_root / "data" / "audio"
+        )
+
+        self.text_directory = (
+            self.project_root / "data" / "text"
+        )
 
     def get_audio_files(self):
-        """Return all supported audio files for the user."""
+        """Return all existing audio recordings."""
 
-        if not self.user_directory.exists():
+        if not self.audio_directory.exists():
             return []
 
-        audio_files = [
+        return sorted(
             file
-            for file in self.user_directory.iterdir()
+            for file in self.audio_directory.iterdir()
             if file.is_file()
-            and file.suffix.lower() in self.SUPPORTED_EXTENSIONS
-        ]
+            and file.suffix.lower()
+            in self.SUPPORTED_EXTENSIONS
+        )
 
-        return sorted(audio_files)
+    def get_transcript(self, audio_file):
+        """
+        Find the transcript matching an audio file.
+        Example:
+            recording_123.wav
+            recording_123.txt
+        """
 
-    def get_metadata(self):
-        """Load metadata.json if it exists."""
+        transcript_file = (
+            self.text_directory
+            / f"{audio_file.stem}.txt"
+        )
 
-        if not self.metadata_file.exists():
-            return []
+        if not transcript_file.exists():
+            return None
 
         try:
-            with open(self.metadata_file, "r", encoding="utf-8") as file:
-                return json.load(file)
+            return transcript_file.read_text(
+                encoding="utf-8"
+            ).strip()
 
-        except (json.JSONDecodeError, OSError):
-            return []
+        except OSError:
+            return None
 
-    def create_metadata(self, transcript_map=None):
+    def get_training_pairs(self):
         """
-        Create basic metadata for the available audio files.
-
-        transcript_map:
-            Optional dictionary mapping filename -> transcript.
+        Return audio-transcript pairs where both files exist.
         """
 
-        transcript_map = transcript_map or {}
-
-        metadata = []
+        pairs = []
 
         for audio_file in self.get_audio_files():
-            metadata.append(
-                {
-                    "audio_file": audio_file.name,
-                    "text": transcript_map.get(audio_file.name, ""),
-                }
+
+            transcript = self.get_transcript(
+                audio_file
             )
 
-        self.user_directory.mkdir(parents=True, exist_ok=True)
+            if transcript:
+                pairs.append(
+                    {
+                        "audio": audio_file,
+                        "text": transcript
+                    }
+                )
 
-        with open(self.metadata_file, "w", encoding="utf-8") as file:
-            json.dump(metadata, file, ensure_ascii=False, indent=2)
-
-        return metadata
+        return pairs
 
     def __len__(self):
-        return len(self.get_audio_files())
+        return len(self.get_training_pairs())
