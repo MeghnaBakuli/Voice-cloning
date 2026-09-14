@@ -42,7 +42,12 @@ class VoiceCloningManager:
     """
 
     def __init__(self):
-
+self.reference_manager = (
+    ReferenceManager()
+)
+self.model_registry = (
+    ModelRegistry()
+)
         print(
             "Initializing Voice Cloning Manager..."
         )
