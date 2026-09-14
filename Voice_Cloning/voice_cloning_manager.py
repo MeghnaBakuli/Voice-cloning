@@ -173,7 +173,21 @@ self.model_registry = (
                 user_id
             )
         )
+model_path = (
+    self.model_registry
+    .get_model_path(user_id)
+)
 
+if model_path:
+    print(
+        f"Fine-tuned model found for user "
+        f"'{user_id}': {model_path}"
+    )
+else:
+    print(
+        f"No fine-tuned model found for user "
+        f"'{user_id}'. Using zero-shot cloning."
+    )
 
         if output_path is None:
 
