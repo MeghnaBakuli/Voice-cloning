@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import sys
 
@@ -11,121 +10,103 @@ if str(VOICE_CLONING_DIR) not in sys.path:
     sys.path.insert(0, str(VOICE_CLONING_DIR))
 
 
-from config import DATASET_DIRECTORY, TRAINED_MODELS_DIRECTORY
+from fine_tuning.dataset import VoiceDataset
 
 
 class FineTuningTrainer:
     """
-    XTTS-v2 fine-tuning trainer.
-
-    This module prepares the training configuration
-    and launches the Coqui XTTS training process.
+    Prepares the existing audio + transcript dataset
+    for XTTS-v2 fine-tuning.
     """
 
-    def __init__(self, user_id):
-        self.user_id = user_id
-
-        self.dataset_directory = (
-            Path(DATASET_DIRECTORY) / user_id
+    def __init__(self):
+        self.project_root = (
+            VOICE_CLONING_DIR.parent
         )
 
-        self.output_directory = (
-            Path(TRAINED_MODELS_DIRECTORY) / user_id
+        self.dataset = VoiceDataset(
+            self.project_root
         )
 
     def validate_dataset(self):
         """
-        Check whether the user's dataset exists
-        and contains audio files.
+        Check that audio files have matching transcripts.
         """
 
-        if not self.dataset_directory.exists():
-            raise FileNotFoundError(
-                f"Dataset not found for user: {self.user_id}"
-            )
+        pairs = self.dataset.get_training_pairs()
 
-        audio_extensions = {
-            ".wav",
-            ".mp3",
-            ".flac",
-            ".ogg",
-            ".m4a"
-        }
-
-        audio_files = [
-            file
-            for file in self.dataset_directory.iterdir()
-            if file.is_file()
-            and file.suffix.lower() in audio_extensions
-        ]
-
-        if not audio_files:
+        if not pairs:
             raise ValueError(
-                f"No audio files found for user: {self.user_id}"
+                "No matching audio-transcript pairs found."
             )
 
-        return sorted(audio_files)
+        missing_transcripts = []
 
-    def prepare_output_directory(self):
-        """
-        Create the user's model output directory.
-        """
+        for audio_file in self.dataset.get_audio_files():
 
-        self.output_directory.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+            transcript = self.dataset.get_transcript(
+                audio_file
+            )
 
-        return self.output_directory
+            if not transcript:
+                missing_transcripts.append(
+                    audio_file.name
+                )
+
+        return pairs, missing_transcripts
 
     def prepare(self):
         """
-        Validate the dataset and prepare the
-        fine-tuning output directory.
+        Validate and display the existing dataset.
         """
 
-        audio_files = self.validate_dataset()
-        output_directory = (
-            self.prepare_output_directory()
+        pairs, missing_transcripts = (
+            self.validate_dataset()
         )
 
         print(
-            f"User: {self.user_id}"
+            f"Audio files found: "
+            f"{len(self.dataset.get_audio_files())}"
         )
 
         print(
-            f"Audio files found: {len(audio_files)}"
+            f"Matching audio-transcript pairs: "
+            f"{len(pairs)}"
         )
 
         print(
-            f"Dataset: {self.dataset_directory}"
+            f"Missing transcripts: "
+            f"{len(missing_transcripts)}"
         )
 
         print(
-            f"Output: {output_directory}"
+            f"Audio directory: "
+            f"{self.dataset.audio_directory}"
         )
 
-        return {
-            "user_id": self.user_id,
-            "audio_files": audio_files,
-            "dataset_directory": self.dataset_directory,
-            "output_directory": output_directory
-        }
+        print(
+            f"Text directory: "
+            f"{self.dataset.text_directory}"
+        )
+
+        print("\nSample training pairs:")
+
+        for pair in pairs[:5]:
+
+            print(
+                f"\nAudio: {pair['audio'].name}"
+            )
+
+            print(
+                f"Text: {pair['text']}"
+            )
+
+        return pairs
 
 
 def main():
 
-    if len(sys.argv) < 2:
-        print(
-            "Usage: python train.py <user_id>"
-        )
-        return
-
-    user_id = sys.argv[1]
-
-    trainer = FineTuningTrainer(
-        user_id
-    )
+    trainer = FineTuningTrainer()
 
     trainer.prepare()
 
