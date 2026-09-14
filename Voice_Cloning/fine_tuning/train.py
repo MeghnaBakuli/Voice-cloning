@@ -2,11 +2,6 @@
 from pathlib import Path
 import sys
 
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-import torchaudio
-
 
 # Allow imports from Voice_Cloning
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -15,84 +10,124 @@ VOICE_CLONING_DIR = CURRENT_DIR.parent
 if str(VOICE_CLONING_DIR) not in sys.path:
     sys.path.insert(0, str(VOICE_CLONING_DIR))
 
+
 from config import DATASET_DIRECTORY, TRAINED_MODELS_DIRECTORY
 
 
-class AudioDataset(Dataset):
-    """Simple audio dataset for testing the fine-tuning pipeline."""
+class FineTuningTrainer:
+    """
+    XTTS-v2 fine-tuning trainer.
 
-    def __init__(self, audio_files):
-        self.audio_files = audio_files
+    This module prepares the training configuration
+    and launches the Coqui XTTS training process.
+    """
 
-    def __len__(self):
-        return len(self.audio_files)
+    def __init__(self, user_id):
+        self.user_id = user_id
 
-    def __getitem__(self, index):
-        audio_path = self.audio_files[index]
+        self.dataset_directory = (
+            Path(DATASET_DIRECTORY) / user_id
+        )
 
-        waveform, sample_rate = torchaudio.load(str(audio_path))
+        self.output_directory = (
+            Path(TRAINED_MODELS_DIRECTORY) / user_id
+        )
 
-        # Convert stereo audio to mono
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
+    def validate_dataset(self):
+        """
+        Check whether the user's dataset exists
+        and contains audio files.
+        """
 
-        return waveform, sample_rate
+        if not self.dataset_directory.exists():
+            raise FileNotFoundError(
+                f"Dataset not found for user: {self.user_id}"
+            )
 
+        audio_extensions = {
+            ".wav",
+            ".mp3",
+            ".flac",
+            ".ogg",
+            ".m4a"
+        }
 
-def find_audio_files(user_id):
-    """Find all supported audio files for a user."""
+        audio_files = [
+            file
+            for file in self.dataset_directory.iterdir()
+            if file.is_file()
+            and file.suffix.lower() in audio_extensions
+        ]
 
-    user_directory = Path(DATASET_DIRECTORY) / user_id
+        if not audio_files:
+            raise ValueError(
+                f"No audio files found for user: {self.user_id}"
+            )
 
-    if not user_directory.exists():
-        return []
+        return sorted(audio_files)
 
-    extensions = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+    def prepare_output_directory(self):
+        """
+        Create the user's model output directory.
+        """
 
-    return sorted(
-        file
-        for file in user_directory.iterdir()
-        if file.is_file() and file.suffix.lower() in extensions
-    )
+        self.output_directory.mkdir(
+            parents=True,
+            exist_ok=True
+        )
 
+        return self.output_directory
 
-def test_dataset(user_id):
-    """Test whether the user's audio dataset can be loaded."""
+    def prepare(self):
+        """
+        Validate the dataset and prepare the
+        fine-tuning output directory.
+        """
 
-    audio_files = find_audio_files(user_id)
-
-    print(f"Audio files found: {len(audio_files)}")
-
-    if not audio_files:
-        print("No audio files found.")
-        return
-
-    dataset = AudioDataset(audio_files)
-
-    for index in range(min(3, len(dataset))):
-        waveform, sample_rate = dataset[index]
+        audio_files = self.validate_dataset()
+        output_directory = (
+            self.prepare_output_directory()
+        )
 
         print(
-            f"{audio_files[index].name}: "
-            f"shape={tuple(waveform.shape)}, "
-            f"sample_rate={sample_rate}"
+            f"User: {self.user_id}"
         )
+
+        print(
+            f"Audio files found: {len(audio_files)}"
+        )
+
+        print(
+            f"Dataset: {self.dataset_directory}"
+        )
+
+        print(
+            f"Output: {output_directory}"
+        )
+
+        return {
+            "user_id": self.user_id,
+            "audio_files": audio_files,
+            "dataset_directory": self.dataset_directory,
+            "output_directory": output_directory
+        }
 
 
 def main():
+
     if len(sys.argv) < 2:
-        print("Usage: python train.py <user_id>")
+        print(
+            "Usage: python train.py <user_id>"
+        )
         return
 
     user_id = sys.argv[1]
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    trainer = FineTuningTrainer(
+        user_id
+    )
 
-    print(f"Device: {device}")
-    print(f"Dataset directory: {DATASET_DIRECTORY}")
-    print(f"Model directory: {TRAINED_MODELS_DIRECTORY}")
-
-    test_dataset(user_id)
+    trainer.prepare()
 
 
 if __name__ == "__main__":
