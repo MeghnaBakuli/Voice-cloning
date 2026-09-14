@@ -14,6 +14,9 @@ from Voice_Cloning.xtts_zero_shot import (
 from Voice_Cloning.reference_manager import (
     ReferenceManager
 )
+from Voice_Cloning.fine_tuning.model_registry import (
+    ModelRegistry
+)
 
 from Voice_Cloning.utils import (
     ensure_directory,
